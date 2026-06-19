@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Private history and configuration
+*.lm
+*.yaml
+!tests/**/*.yaml  # Allow test YAML
+
+# Keys and secrets
+init_keys.sh
+.env
