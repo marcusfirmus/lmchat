@@ -1,0 +1,27 @@
+#! /bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+. "$SCRIPT_DIR/lm-common.sh"
+
+echo '*** Default settings: ***'
+echo ''
+
+cat $LM_DIR/state.yaml
+
+D=`readlink -f $(pwd)`
+CHAT=`yq .$D < $LM_DIR/registry.yaml`
+
+echo ''
+
+if [ "$CHAT" != '' -a "$CHAT" != null ]; then
+        echo '*** Current chat file: ***'
+        echo ''
+        ls -la "$CHAT"
+        echo ''
+        wc "$CHAT"
+else
+        echo '*** No current chat in this directory ***'
+fi
+

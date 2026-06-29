@@ -1,0 +1,12 @@
+#!/bin/bash
+
+SCRIPT="$(readlink -f "$0")"
+SCRIPT_DIR="$(dirname "$SCRIPT")"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+. "$SCRIPT_DIR/lm-common.sh"
+
+source "$REPO_DIR/.venv/bin/activate"
+
+exec python3 "$REPO_DIR/lib/lmchat.py" "$@"
+

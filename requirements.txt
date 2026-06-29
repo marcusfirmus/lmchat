@@ -1,0 +1,8 @@
+# Core dependencies
+PyYAML>=6.0.1
+litellm>=1.89.2,<2.0.0
+rich>=13.0.0
+
+# Development and testing
+pytest>=8.0.0
+

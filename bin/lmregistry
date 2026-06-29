@@ -1,0 +1,11 @@
+#! /bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+. "$SCRIPT_DIR/lm-common.sh"
+
+echo '*** Registered CHATS: ***'
+echo ''
+
+cat $LM_DIR/registry.yaml

@@ -1,0 +1,21 @@
+#! /bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+. "$SCRIPT_DIR/lm-common.sh"
+
+do_help () {
+        echo "Usage:  lmtmpcopy newfile"
+        echo "(Copy the temporary file to new place)"
+        echo "See also 'lmaliases', 'lmchat', 'lminfo', 'lmregistry'" 
+}
+
+ARG=${1:-''}
+
+if [ "$ARG" == '' -o "$ARG" == '-h' -o "$ARG" == '--help' ]; then
+        do_help
+        exit
+fi
+
+cp "$LM_DIR/temp_trash.yaml" "$ARG"

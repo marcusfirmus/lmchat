@@ -1,0 +1,33 @@
+#! /bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+. "$SCRIPT_DIR/lm-common.sh"
+
+AFILE=$LM_DIR/aliases.yaml
+
+do_help () {
+        echo "Usage:  lmaliases                         - show aliases"
+        echo "        lmaliases -e  (or --edit)         - edit aliases"
+        echo "        lmaliases -h  (or --help)         - show this help"
+        echo "See also 'lmchat', 'lminfo', 'lmregistry', 'lmtmpcopy'" 
+}
+
+OPT=${1:-''}
+
+if [ "$OPT" == '-e' ]; then 
+        $EDITOR $AFILE
+elif [ "$OPT" == '--edit' ]; then        
+        $EDITOR $AFILE
+elif [ "$OPT" == '-h' ]; then
+        do_help
+elif [ "$OPT" == '--help' ]; then
+        do_help
+else        
+        echo '*** Defined model aliases: ***'
+        echo ''
+
+        less -RSFX $AFILE
+fi
+
