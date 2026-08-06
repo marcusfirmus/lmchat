@@ -57,22 +57,26 @@ def init_env():
             "default_chat": "default_chat.yaml"
         })
     if not ALIASES_FILE.exists():
-        save_yaml(ALIASES_FILE, { "lite": "gemini/gemini-flash-lite-latest",   
+        save_yaml(ALIASES_FILE, { 
+            "lite": "gemini/gemini-flash-lite-latest",   
             "flash": "gemini/gemini-flash-latest",
             "gptoss": "ollama/gpt-oss:120b-cloud",
             "local": "ollama/gemma3:4b",
             "auto": "openrouter/openrouter/auto",
             "free": "openrouter/openrouter/free",
             "gpt": "openrouter/openai/gpt-chat-latest",
-            "haiku": "openrouter/anthropic/claude-haiku-4.5" })
+            "haiku": "openrouter/anthropic/claude-haiku-4.5" 
+        })
 
     if not REGISTRY_FILE.exists():
         save_yaml(REGISTRY_FILE, {})
     if not CONFIG_FILE.exists():
         # Default pager (less). -F (quit if one screen), -R (colors), -X (no clear)
-        save_yaml(CONFIG_FILE, {"pager": "less -FRX", 
-                                "padding": 4, 
-                                "line_length": 90})
+        save_yaml(CONFIG_FILE, {
+            "pager": "less -FRX", 
+            "padding": 4, 
+            "line_length": 90
+        })
 
 
 def load_yaml(path: Path) -> dict:
@@ -197,10 +201,8 @@ class LMChat:
             filename = self.args.c or self.args.C
         
             if not filename:
-                 # Check registry for CWD
                  filename = self.registry.get(self.cwd, self.state.get("default_chat", "default.yaml"))
 
-        # Logic for appending .yaml and determining the full path
         path_parts = Path(filename).parts
         base_name = path_parts[-1]
         if "." not in base_name:
@@ -215,20 +217,17 @@ class LMChat:
             self.state["default_chat"] = self.chat_path.name
             save_yaml(STATE_FILE, self.state)
 
-        # --- STATE SAVING (skipped if we are in -t mode) ---
         if not self.args.temp:
             if self.args.C:
                 self.state["default_chat"] = self.chat_path.name
                 save_yaml(STATE_FILE, self.state)
 
-            # Register chat for the current directory
-            self.registry[self.cwd] = str(self.chat_path)  # store full path!
+            self.registry[self.cwd] = str(self.chat_path)
             save_yaml(REGISTRY_FILE, self.registry)
 
     def _resolve_metadata(self):
         self.chat_yaml = load_yaml(self.chat_path)
         
-        # If the file is empty/new, initialize the structure
         if not self.chat_yaml:
             self.chat_yaml = {
                 "version": 1,
@@ -243,23 +242,19 @@ class LMChat:
 
         meta = self.chat_yaml["metadata"]
 
-        # 1. Model resolution
         raw_model = self.args.m or self.args.M or meta.get("model") or self.state.get("default_model")
-        # If model is an alias, resolve it
         self.model = self.aliases.get(raw_model, raw_model)
         
         if self.args.M:
             self.state["default_model"] = self.model
             save_yaml(STATE_FILE, self.state)
             
-        # 2. System Prompt resolution
         self.sys_prompt = self.args.s or self.args.S or meta.get("system_prompt") or self.state.get("default_system_prompt")
         
         if self.args.S:
             self.state["default_system_prompt"] = self.sys_prompt
             save_yaml(STATE_FILE, self.state)
 
-        # Update YAML with resolved values for the current session
         meta["model"] = self.model
         meta["system_prompt"] = self.sys_prompt
         meta["updated"] = get_iso_time()
@@ -301,7 +296,6 @@ class LMChat:
     def view_chat(self):
         self._init_printing(formatter=False)
 
-        """Viewing mode (no new message)"""
         if not self.chat_yaml.get("messages"):
             print(self.format_string("[dim text]Chat is empty.[/]"))
             return
@@ -321,23 +315,18 @@ class LMChat:
         self._output_string("\n")    
 
     def do_chat(self, user_content):
-        """Chat mode (interaction with LLM)"""
-        # Import litellm only when chatting is actually required
         from litellm import completion, cost_per_token
 
-        self._init_printing( formatter = not self.args.raw )
+        self._init_printing(formatter=not self.args.raw)
 
-        # Prepare messages
         messages = [{"role": "system", "content": self.sys_prompt}]
 
-        # In temporary mode we discard previous messages, if any existed.
         if self.args.temp:
             self.chat_yaml["messages"] = []
 
         for msg in self.chat_yaml.get("messages", []):
             messages.append({"role": msg["role"], "content": msg["content"]})
         
-        # New user message
         messages.append({"role": "user", "content": user_content})
         
         user_message = {"role": "user", "content": user_content, "timestamp": get_iso_time()}
@@ -345,28 +334,68 @@ class LMChat:
         if not self.args.raw:
             user_header = self.format_message_header(user_message)
             self._output_string(user_header)
+            user_content_formatted = self.format_message_content(user_message)
+            self._output_string(user_content_formatted)
 
-        if not self.args.raw:
-            user_content = self.format_message_content(user_message)
-            self._output_string(user_content)
+        # Configura $response_format for JSON / Structured Outputs
+        response_format = None
+
+        if self.args.json_schema:
+            schema_arg = self.args.json_schema.strip()
+            # If standard file path provided, load from file
+            if os.path.exists(schema_arg):
+                with open(schema_arg, 'r', encoding='utf-8') as f:
+                    if schema_arg.endswith(('.yaml', '.yml')):
+                        schema_data = yaml.safe_load(f)
+                    else:
+                        schema_data = json.load(f)
+            else:
+                try:
+                    schema_data = json.loads(schema_arg)
+                except json.JSONDecodeError as e:
+                    print(f"JSON parsing error for --json-schema: {e}")
+                    sys.exit(1)
+
+            # Normalize format for LiteLLM / OpenAI Structured Outputs
+            if isinstance(schema_data, dict) and "type" in schema_data and "json_schema" in schema_data:
+                response_format = schema_data
+            elif isinstance(schema_data, dict) and "name" in schema_data and "schema" in schema_data:
+                response_format = {"type": "json_schema", "json_schema": schema_data}
+            else:
+                response_format = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "custom_schema",
+                        "strict": True,
+                        "schema": schema_data
+                    }
+                }
+        elif self.args.json:
+            response_format = {"type": "json_object"}
+            # Ensure "JSON" word exists in prompt to prevent OpenAI API validation errors
+            has_json = any("json" in m["content"].lower() for m in messages)
+            if not has_json:
+                messages[0]["content"] += " The answer must be valid JSON object"
 
         full_response = ""
         prompt_tokens = 0
         completion_tokens = 0
 
-        # Open a pipe to the pager for smooth streaming, if forced/wanted.
-        # Here, for simplicity and terminal smoothness, we often print directly. Pager in Stream is optional.
         try:
             assistant_message = {"role": "assistant", "model": self.model}
             if not self.args.raw:
                 assistant_header = self.format_message_header(assistant_message)
                 self._output_string(assistant_header)
 
-            response = completion(
-                model=self.model,
-                messages=messages,
-                stream=True
-            )
+            completion_kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "stream": True
+            }
+            if response_format:
+                completion_kwargs["response_format"] = response_format
+
+            response = completion(**completion_kwargs)
             
             for chunk in response:
                 content = chunk.choices[0].delta.content or ""
@@ -377,7 +406,6 @@ class LMChat:
                 else:
                     self._output_string(content)
                 
-                # Capture usage metadata (especially in Litellm v1.x)
                 if hasattr(chunk, 'usage') and chunk.usage:
                     prompt_tokens = chunk.usage.get("prompt_tokens", 0)
                     completion_tokens = chunk.usage.get("completion_tokens", 0)
@@ -386,11 +414,9 @@ class LMChat:
             print(f"Communication error with LLM: {e}")
             sys.exit(1)
 
-        # Ensure newline at the end in raw mode
         if self.args.raw and full_response and not full_response.endswith('\n'):
             self._output_string('\n')
 
-        # Save response to YAML
         self.chat_yaml["messages"].append({
             "role": "assistant",
             "model": self.model,
@@ -400,12 +426,11 @@ class LMChat:
         })
         save_yaml(self.chat_path, self.chat_yaml)
 
-        # Logging (approximate costs for local models are 0)
         cost = 0.0
         try:
             cost = cost_per_token(model=self.model, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         except Exception:
-            pass  # Ignore cost calculation errors for models without pricing
+            pass
             
         log_interaction(
             self.chat_path.name,
@@ -422,7 +447,10 @@ class LMChat:
 def main():
     init_env()
     
-    parser = argparse.ArgumentParser(description="Terminal LLM Chat (lmchat)")
+    parser = argparse.ArgumentParser(
+        description="Terminal LLM client (lmchat)",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     
     # Chat handling
     parser.add_argument("-c", type=str, metavar="FILE", help="Chat file (opens or creates a new one)")
@@ -435,6 +463,19 @@ def main():
     # System prompt handling
     parser.add_argument("-s", type=str, metavar="PROMPT", help="Set system prompt for the current session")
     parser.add_argument("-S", type=str, metavar="PROMPT", help="Set system prompt and save as default")
+
+    # JSON & Format options
+    parser.add_argument(
+        "-j", "--json", 
+        action="store_true", 
+        help="Enforce JSON mode response"
+    )
+    parser.add_argument(
+        "-J", "--json-schema", "--schema", 
+        type=str, 
+        metavar="SCHEMA_OR_FILE", 
+        help="Enforce a strict JSON output schema (accepts a JSON Schema string or a path to a .json/.yaml file)"
+    )
     
     # Temporary chat handling
     parser.add_argument("-t", "--temp", action="store_true", help="Temporary mode: does not update registry or state. Uses a temporary file unless -c is provided.")
@@ -457,9 +498,6 @@ def main():
     args = parser.parse_args()
 
     app = LMChat(args)
-
-    # This function does not work well with the pager, but I keep it here for now,
-    # as it may still be useful during debugging.
     app.print_verbose()
 
     # Collect Prompt (CLI + Stdin)
@@ -468,7 +506,6 @@ def main():
     if args.prompt:
         user_input_parts.append(" ".join(args.prompt))
         
-    # If data comes from a pipe, always read it (only if not a tty)
     if not sys.stdin.isatty():
         stdin_content = sys.stdin.read().strip()
         if stdin_content:
@@ -476,7 +513,6 @@ def main():
             
     final_user_input = "\n\n".join(user_input_parts).strip()
 
-    # Determine mode
     mode_view = args.print or (not final_user_input and sys.stdin.isatty())
 
     try:
@@ -484,21 +520,15 @@ def main():
             app.view_chat()
         else:
             if not final_user_input:
-               # This situation can occur after running `lmchat < /dev/null`,
-               # but also possibly inside some complex script:
                print("No question/prompt provided. Run with -h to see help.")
                return
             app.do_chat(final_user_input)
     except BrokenPipeError:
-        # User closed less (e.g., by pressing 'q')
         pass
     finally:
-        # Close stdin so less knows it's the end of data
         if app._pager:
             if app._pager.stdin:
                 app._pager.stdin.close()
-
-            # Wait for the less process to finish
             app._pager.wait()
 
 if __name__ == "__main__":
