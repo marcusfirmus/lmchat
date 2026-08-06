@@ -14,9 +14,6 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-# External libraries
-from litellm import completion, cost_per_token
-
 # ==========================================
 # ENVIRONMENT AND FILE CONFIGURATION
 # ==========================================
@@ -296,6 +293,9 @@ class LMChat:
 
     def do_chat(self, user_content):
         """Chat mode (interaction with LLM)"""
+        # Import litellm only when chatting is actually required
+        from litellm import completion, cost_per_token
+
         self._init_printing( formatter = not self.args.raw )
 
         # Prepare messages
@@ -470,4 +470,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
