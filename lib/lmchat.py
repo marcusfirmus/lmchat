@@ -111,6 +111,10 @@ class LMChat:
         self.registry = load_yaml(REGISTRY_FILE)
         self.aliases = load_yaml(ALIASES_FILE)
         self.config = load_yaml(CONFIG_FILE)
+        
+        # Apply CLI configuration overrides
+        self._apply_config_overrides()
+
         self.cwd = str(Path.cwd())
 
         self._output_string = None     # Function that writes to `pager` or directly to `stdout`
@@ -123,6 +127,30 @@ class LMChat:
         self.chat_yaml = None
         self._resolve_chat_path()
         self._resolve_metadata()
+
+    def _apply_config_overrides(self):
+        """Overrides configuration parameters based on CLI arguments."""
+        # 1. Handle dedicated --no-pager flag
+        if getattr(self.args, "no_pager", False):
+            self.config["pager"] = ""
+
+        # 2. Handle generic -o / --option key=value overrides
+        if self.args.option:
+            for opt in self.args.option:
+                if "=" not in opt:
+                    print(f"Warning: Ignored invalid option format '{opt}'. Use key=value.")
+                    continue
+                
+                key, val_str = opt.split("=", 1)
+                key = key.strip()
+                
+                # Use yaml.safe_load to automatically parse types (int, float, bool, null, str)
+                try:
+                    parsed_val = yaml.safe_load(val_str)
+                except Exception:
+                    parsed_val = val_str  # Fallback to raw string if parsing fails
+
+                self.config[key] = parsed_val
 
     def _init_printing(self, formatter: bool):
         self._coloring = IS_TTY
@@ -241,6 +269,7 @@ class LMChat:
             print(f"Chat file : {self.chat_path}")
             print(f"Model     : {self.model}")
             print(f"Sys Prompt: {self.sys_prompt[:50]}...\n")
+            print(f"Config    : {self.config}\n")
 
     def format_message_header(self, msg):
         if self._coloring:
@@ -412,11 +441,15 @@ def main():
     
     # Interface options
     parser.add_argument("-p", "--print", action="store_true", help="Force READ‑ONLY/VIEW mode (do not ask for input)")
-    parser.add_argument("-r", "--raw", action="store_true", help="x Show only the raw text of the last reply")
+    parser.add_argument("-r", "--raw", action="store_true", help="Show only the raw text of the last reply")
     parser.add_argument("-v", "--verbose", action="store_true", help="Display details of configuration decisions")
     
     # Rendering options (toggles)
     parser.add_argument("-R", "--no-rich", action="store_true", help="Disable Markdown rendering in view mode")
+    parser.add_argument("--no-pager", action="store_true", help="Disable pager for this run (useful for fzf preview)")
+
+    # Generic Configuration Overrides
+    parser.add_argument("-o", "--option", action="append", metavar="KEY=VALUE", help="Override config parameter (can be used multiple times, e.g. -o padding=0)")
     
     # Prompt content
     parser.add_argument("prompt", nargs="*", help="Content of the new message (joined with stdin)")
