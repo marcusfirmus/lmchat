@@ -304,7 +304,6 @@ class LMChat:
             fhdr = self.format_file_header()
             self._output_string( self.format_string(fhdr) + '\n' )
 
-        out = ""
         for msg in self.chat_yaml["messages"]:
             header = self.format_message_header(msg)
             self._output_string(header)
@@ -366,7 +365,6 @@ class LMChat:
                     "type": "json_schema",
                     "json_schema": {
                         "name": "custom_schema",
-                        "strict": True,
                         "schema": schema_data
                     }
                 }
@@ -390,10 +388,15 @@ class LMChat:
             completion_kwargs = {
                 "model": self.model,
                 "messages": messages,
-                "stream": True
+                "stream": True,
+                "num_ctx": 32768
             }
             if response_format:
                 completion_kwargs["response_format"] = response_format
+                
+            max_tokens = self.args.max_tokens if self.args.max_tokens is not None else self.config.get("max_tokens")
+            if max_tokens is not None:
+                completion_kwargs["max_tokens"] = int(max_tokens)
 
             response = completion(**completion_kwargs)
             
@@ -463,6 +466,8 @@ def main():
     # System prompt handling
     parser.add_argument("-s", type=str, metavar="PROMPT", help="Set system prompt for the current session")
     parser.add_argument("-S", type=str, metavar="PROMPT", help="Set system prompt and save as default")
+    
+    parser.add_argument("-n", "--max-tokens", type=int, metavar="INT", help="Output tokens limit")
 
     # JSON & Format options
     parser.add_argument(
@@ -472,7 +477,6 @@ def main():
     )
     parser.add_argument(
         "-J", "--json-schema", "--schema", 
-        type=str, 
         metavar="SCHEMA_OR_FILE", 
         help="Enforce a strict JSON output schema (accepts a JSON Schema string or a path to a .json/.yaml file)"
     )
